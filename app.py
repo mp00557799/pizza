@@ -1,7 +1,7 @@
 import os
 
-import altair as alt
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from labeler import BUSINESS, label_comment, using_demo_mode
@@ -96,39 +96,38 @@ with tab_owner:
         m3.metric("Average stars", f"{df['rating'].mean():.1f} ★")
         m4.metric("Read carefully", n_flag)
 
-        scale = alt.Scale(domain=list(LABEL_COLORS), range=list(LABEL_COLORS.values()))
-        color = alt.Color("label:N", title=None, scale=scale, legend=alt.Legend(orient="bottom"))
+        order = {"label": ["positive", "negative", "unclear"]}
         c1, c2, c3 = st.columns(3)
 
         with c1:
             st.caption("Number of comments by label")
             counts = df["label"].value_counts().rename_axis("label").reset_index(name="count")
-            count_bars = alt.Chart(counts).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-                x=alt.X("label:N", title=None, axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("count:Q", title="Comments", axis=alt.Axis(tickMinStep=1)),
-                color=color, tooltip=["label", "count"])
-            count_text = count_bars.mark_text(dy=-8, fontWeight="bold").encode(text="count:Q")
-            st.altair_chart(count_bars + count_text, width="stretch")
+            fig = px.bar(counts, x="label", y="count", color="label", text="count",
+                         color_discrete_map=LABEL_COLORS, category_orders=order)
+            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Comments", margin=dict(t=10))
+            fig.update_yaxes(dtick=1)
+            st.plotly_chart(fig, width="stretch")
 
         with c2:
             st.caption("Average stars by label")
             avg = df.groupby("label")["rating"].mean().round(2).reset_index()
-            bars = alt.Chart(avg).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-                x=alt.X("label:N", title=None, axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("rating:Q", title="Average stars", scale=alt.Scale(domain=[0, 5]), axis=alt.Axis(tickMinStep=1)),
-                color=color, tooltip=["label", "rating"])
-            text = bars.mark_text(dy=-8, fontWeight="bold").encode(text=alt.Text("rating:Q", format=".1f"))
-            st.altair_chart(bars + text, width="stretch")
+            fig = px.bar(avg, x="label", y="rating", color="label", text="rating",
+                         color_discrete_map=LABEL_COLORS, category_orders=order, range_y=[0, 5])
+            fig.update_traces(texttemplate="%{text:.1f}")
+            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Average stars", margin=dict(t=10))
+            st.plotly_chart(fig, width="stretch")
 
         with c3:
             st.caption("Stars given, colored by label")
             stars_df = df.assign(stars=df["rating"].astype(int)).groupby(["stars", "label"]).size() \
                          .reset_index(name="count")
-            stack = alt.Chart(stars_df).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                x=alt.X("stars:O", title="Stars", axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("count:Q", title="Comments", axis=alt.Axis(tickMinStep=1)),
-                color=color, tooltip=["stars", "label", "count"])
-            st.altair_chart(stack, width="stretch")
+            fig = px.bar(stars_df, x="stars", y="count", color="label",
+                         color_discrete_map=LABEL_COLORS, category_orders=order)
+            fig.update_layout(xaxis_title="Stars", yaxis_title="Comments", legend_title_text=None,
+                              legend=dict(orientation="h", y=-0.25), margin=dict(t=10))
+            fig.update_xaxes(dtick=1)
+            fig.update_yaxes(dtick=1)
+            st.plotly_chart(fig, width="stretch")
         st.caption("Look for positive comments with few stars, or negative comments with many stars. "
                    "Those are the comments listed below.")
 

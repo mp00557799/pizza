@@ -1,5 +1,4 @@
 """The labeler. You do NOT need to edit this file to start.
-Week 3 opens the box and explains how the API call works.
 
 label_comment(text) -> one of LABELS, or "unclear" if the model answers something else.
 """
@@ -9,11 +8,9 @@ import requests
 # ---- CHANGE THIS for your own business ---------------------------------
 BUSINESS = "a pizza delivery company"
 LABELS = ["positive", "negative"]
-GUIDE = """Label the customer comment with exactly one word: positive or negative.
-- Label by the overall message of the comment.
-- If it has praise and a complaint, label by the bigger problem the customer would act on.
-- Sarcasm counts as negative.
-- If it is a question or too short to tell, choose the closer label."""
+GUIDE = """Label the comment with exactly one word: positive or negative.
+If it has praise and a complaint, label by the bigger problem.
+Sarcasm counts as negative."""
 # -------------------------------------------------------------------------
 
 # If you get a 404, the model was retired. List yours at https://console.groq.com/docs/models
@@ -43,8 +40,7 @@ def label_comment(text):
     key = _get_key()
     if not key:
         return _demo_label(text)
-    prompt = (f"You label customer comments for {BUSINESS}.\n{GUIDE}\n"
-              f"Allowed labels: {', '.join(LABELS)}.\nReply with the label only.\n\nComment: {text}")
+    prompt = f"You label customer comments for {BUSINESS}.\n{GUIDE}\n\nComment: {text}"
     r = requests.post(
         URL,
         headers={"Authorization": f"Bearer {key}"},

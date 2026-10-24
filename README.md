@@ -19,7 +19,7 @@ ratings that you can type in (or copy from) to fill it up.
 - `app.py`: the Streamlit app
 - `labeler.py`: the function that asks the LLM for a label (you do not need to edit the API part)
 - `logo.png`, `logo.svg`: the company logo
-- `demo_comments.csv`: sample comments used for testing
+- `demo_comments.csv`: sample comments to type in, not loaded automatically
 - `requirements.txt`: packages Streamlit Cloud installs for you
 
 ## Run it online for free (no terminal)
@@ -29,4 +29,10 @@ ratings that you can type in (or copy from) to fill it up.
 Without a key the app still runs, with a crude keyword rule and a warning.
 Saved files can disappear when the app restarts, so use the Download CSV button.
 
-
+## Your homework: make it about a different business
+Pick a business other than pizza delivery. Edit only the lines marked `CHANGE THIS`:
+- `labeler.py`: BUSINESS, LABELS (keep it to two), GUIDE (your rules for hard cases)
+- `app.py`: TITLE, SUBTITLE, LOGO (replace `logo.png` with your own), what counts as a low or high rating
+Then type about 10 to 20 fictional comments with ratings and check: which comments got flagged?
+Change one rule in GUIDE and see what changes.
+If you get a 404 error about the model, the model was retired: find a current one at console.groq.com/docs/models.
