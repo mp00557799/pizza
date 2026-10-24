@@ -13,7 +13,7 @@ URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def label_comment(text):
-    key = st.secrets["GROQ_API_KEY"]
+    key = st.secrets["GROQ-API-KEY"]
     prompt = f"You label customer comments for {BUSINESS}.\n{GUIDE}\n\nComment: {text}"
     response = requests.post(
         URL,
