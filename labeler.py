@@ -41,16 +41,17 @@ def label_comment(text):
     if not key:
         return _demo_label(text)
     prompt = f"You label customer comments for {BUSINESS}.\n{GUIDE}\n\nComment: {text}"
-    r = requests.post(
+    response = requests.post(
         URL,
         headers={"Authorization": f"Bearer {key}"},
         json={"model": MODEL, "temperature": 0,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=30,
     )
-    r.raise_for_status()
-    answer = r.json()["choices"][0]["message"]["content"].strip().lower().strip(".\"' ")
-    return answer if answer in LABELS else "unclear"
+    response.raise_for_status()
+    answer = response.json()["choices"][0]["message"]["content"]
+    label = answer.strip().lower()
+    return label if label in LABELS else "unclear"
 
 
 def using_demo_mode():
