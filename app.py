@@ -4,148 +4,97 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from labeler import BUSINESS, label_comment, using_demo_mode
+from labeler import label_comment
 
-# ---- CHANGE THIS for your own business ---------------------------------
+# ---- Settings ----------------------------------------------------------
 TITLE = "Slice Street Pizza"
-SUBTITLE = "Customer feedback"
 LOGO = "logo.png"
-LOW_RATING, HIGH_RATING = 2, 4      # a "low" rating is <= 2 stars, a "high" rating is >= 4 stars
+LOW_RATING, HIGH_RATING = 2, 4      # 2 stars or fewer is low, 4 stars or more is high
 CSV_FILE = "feedback.csv"
-LABEL_COLORS = {"positive": "#2BB38A", "negative": "#B34700", "unclear": "#D0D0D0"}   # bluish green, dark vermillion, light gray (colorblind-safe: they differ in lightness)
-# -------------------------------------------------------------------------
-
-
-def needs_review(label, rating):
-    """Flag the rows we should read more carefully."""
-    if label == "positive" and rating <= LOW_RATING:
-        return True
-    if label == "negative" and rating >= HIGH_RATING:
-        return True
-    if label not in ("positive", "negative"):   # "unclear" or anything unexpected
-        return True
-    return False
-
-
-def add_flags(df):
-    df = df.copy()
-    df["read_carefully"] = [needs_review(l, r) for l, r in zip(df["label"], df["rating"])]
-    return df
-
+COLORS = {"positive": "#2BB38A", "negative": "#B34700", "unclear": "#D0D0D0"}
+# ------------------------------------------------------------------------
 
 st.set_page_config(page_title=TITLE, page_icon=LOGO, layout="wide")
+st.image(LOGO, width=90)
+st.title(TITLE)
+st.caption("Customers leave feedback. The app labels it and saves it. The owner analyzes it later.")
 
-logo_col, title_col = st.columns([1, 9], vertical_alignment="center")
-with logo_col:
-    st.image(LOGO, width=90)
-with title_col:
-    st.title(TITLE)
-    st.caption(f"{SUBTITLE}. You run {BUSINESS}. Customers leave feedback, the app labels and stores it, "
-               "and you analyze the data later.")
-
-if using_demo_mode():
-    st.warning("No API key found, so the app is using a crude keyword rule instead of an LLM. "
-               "Add GROQ_API_KEY to your secrets to use the LLM.")
-
-# The app starts empty. Rows are added live and saved to a CSV file.
-if "df" not in st.session_state:
-    st.session_state.df = pd.read_csv(CSV_FILE) if os.path.exists(CSV_FILE) else \
-        pd.DataFrame(columns=["comment", "rating", "label"])
+# Load the saved feedback, or start with an empty table
+if os.path.exists(CSV_FILE):
+    df = pd.read_csv(CSV_FILE)
+else:
+    df = pd.DataFrame(columns=["comment", "rating", "label"])
 
 tab_customer, tab_owner = st.tabs(["Customer: leave feedback", "Owner: analyze the feedback"])
 
+# ---- Customer tab: type feedback, pick stars, get a label, save --------------
 with tab_customer:
-    # ---- 1. Type feedback, pick stars, get a label, save ------------------------
     st.subheader("Tell us about your order")
     with st.form("feedback_form", clear_on_submit=True):
         comment = st.text_area("Your comment")
-        st.write("Rating")
-        stars = st.feedback("stars")          # None until clicked, then 0 to 4
+        stars = st.feedback("stars")          # nothing until clicked, then 0 to 4
         submitted = st.form_submit_button("Send feedback")
 
     if submitted:
         if not comment.strip() or stars is None:
             st.error("Please type a comment and choose a star rating.")
         else:
-            rating = stars + 1                # 1 to 5 stars
-            with st.spinner("Labeling..."):
-                label = label_comment(comment.strip())
-            new_row = pd.DataFrame([{"comment": comment.strip(), "rating": rating, "label": label}])
-            st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
-            st.session_state.df.to_csv(CSV_FILE, index=False)   # save to CSV
+            label = label_comment(comment.strip())
+            new_row = pd.DataFrame([{"comment": comment.strip(), "rating": stars + 1, "label": label}])
+            pd.concat([df, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+            df = pd.read_csv(CSV_FILE)
             st.success("Thank you for your feedback!")
-            st.caption(f"Behind the scenes, the app labeled it: {label} ({'★' * rating})")
+            st.caption(f"Behind the scenes, the app labeled it: {label}")
 
-
-df = add_flags(st.session_state.df)
-
+# ---- Owner tab: analyze the feedback ----------------------------------------
 with tab_owner:
-
     if df.empty:
         st.info("No feedback yet. Switch to the customer tab and add the first comment.")
     else:
-        # ---- 2. Counts and average rating ---------------------------------------
+        # Comments to read carefully: the label and the rating disagree, or the label is unclear
+        flag = ((df["label"] == "positive") & (df["rating"] <= LOW_RATING)) \
+             | ((df["label"] == "negative") & (df["rating"] >= HIGH_RATING)) \
+             | (df["label"] == "unclear")
+
         st.subheader("What are customers saying?")
-        df["rating"] = df["rating"].astype(float)
-        n_total = len(df)
-        n_pos = int((df["label"] == "positive").sum())
-        n_flag = int(df["read_carefully"].sum())
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Comments", n_total)
-        m2.metric("Positive", f"{n_pos / n_total:.0%}")
-        m3.metric("Average stars", f"{df['rating'].mean():.1f} ★")
-        m4.metric("Read carefully", n_flag)
+        m1.metric("Comments", len(df))
+        m2.metric("Positive", f"{(df['label'] == 'positive').mean():.0%}")
+        m3.metric("Average stars", f"{df['rating'].mean():.1f}")
+        m4.metric("Read carefully", int(flag.sum()))
 
-        order = {"label": ["positive", "negative", "unclear"]}
-        c1, c2, c3 = st.columns(3)
+        col1, col2, col3 = st.columns(3)
 
-        with c1:
+        with col1:
             st.caption("Number of comments by label")
             counts = df["label"].value_counts().rename_axis("label").reset_index(name="count")
             fig = px.bar(counts, x="label", y="count", color="label", text="count",
-                         color_discrete_map=LABEL_COLORS, category_orders=order)
-            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Comments", margin=dict(t=10))
-            fig.update_yaxes(dtick=1)
+                         color_discrete_map=COLORS)
+            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Comments")
             st.plotly_chart(fig, width="stretch")
 
-        with c2:
+        with col2:
             st.caption("Average stars by label")
-            avg = df.groupby("label")["rating"].mean().round(2).reset_index()
+            avg = df.groupby("label")["rating"].mean().round(1).reset_index()
             fig = px.bar(avg, x="label", y="rating", color="label", text="rating",
-                         color_discrete_map=LABEL_COLORS, category_orders=order, range_y=[0, 5])
-            fig.update_traces(texttemplate="%{text:.1f}")
-            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Average stars", margin=dict(t=10))
+                         color_discrete_map=COLORS, range_y=[0, 5])
+            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Average stars")
             st.plotly_chart(fig, width="stretch")
 
-        with c3:
+        with col3:
             st.caption("Stars given, colored by label")
-            stars_df = df.assign(stars=df["rating"].astype(int)).groupby(["stars", "label"]).size() \
-                         .reset_index(name="count")
-            fig = px.bar(stars_df, x="stars", y="count", color="label",
-                         color_discrete_map=LABEL_COLORS, category_orders=order)
-            fig.update_layout(xaxis_title="Stars", yaxis_title="Comments", legend_title_text=None,
-                              legend=dict(orientation="h", y=-0.25), margin=dict(t=10))
-            fig.update_xaxes(dtick=1)
-            fig.update_yaxes(dtick=1)
+            by_stars = df.groupby(["rating", "label"]).size().reset_index(name="count")
+            fig = px.bar(by_stars, x="rating", y="count", color="label", color_discrete_map=COLORS)
+            fig.update_layout(xaxis_title="Stars", yaxis_title="Comments", legend_title_text=None)
             st.plotly_chart(fig, width="stretch")
-        st.caption("Look for positive comments with few stars, or negative comments with many stars. "
-                   "Those are the comments listed below.")
 
-        # ---- 3. Read these carefully --------------------------------------------
         st.subheader("Read these carefully")
-        st.caption("The label and the rating disagree (positive with a low rating, negative with a high rating), "
-                   "or the label is unclear.")
-        flagged = df[df["read_carefully"]].copy()
-        if flagged.empty:
-            st.info("Nothing flagged.")
-        else:
-            flagged["stars"] = flagged["rating"].astype(int).map(lambda r: "★" * r)
-            st.dataframe(flagged[["comment", "stars", "label"]], width="stretch")
+        st.caption("The label and the rating disagree (positive with a low rating, negative with a high "
+                   "rating), or the label is unclear.")
+        st.dataframe(df[flag], hide_index=True, width="stretch")
 
-        # ---- All data -----------------------------------------------------------
         with st.expander("All feedback"):
-            st.dataframe(df.drop(columns="read_carefully"), width="stretch")
-        st.download_button("Download CSV", df.drop(columns="read_carefully").to_csv(index=False),
-                           file_name="feedback.csv", mime="text/csv")
-        st.caption("Note: on the free Streamlit Cloud, the saved file can disappear when the app restarts. "
+            st.dataframe(df, hide_index=True, width="stretch")
+        st.download_button("Download CSV", df.to_csv(index=False), file_name="feedback.csv")
+        st.caption("On the free Streamlit Cloud, the saved file can disappear when the app restarts. "
                    "Download your CSV to keep it.")
